@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Canvas App - Digital Collaboration Space</title>
+  <style>
+    :root {
+      --primary-color: #2c7873;
+      --secondary-color: #6fb98f;
+      --accent-color: #ff7e5f;
+      --light-color: #f4f9f4;
+      --dark-color: #2b2b2b;
+      --sidebar-width: 280px;
+      --header-height: 60px;
+    }
+    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body, html {
+      height: 100%;
+      margin: 0;
+      width: 100%;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      background: var(--light-color);
+      color: var(--dark-color);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    
+    header {
+      background-color: var(--primary-color);
+      color: white;
+  width: 100%;
+      height: var(--header-height);
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      z-index: 100;
+    }
+    
+    
+    .header-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      height: 100%;
+      padding: 0 1.5rem;
+    }
+    
+    .logo {
+      font-weight: bold;
+      font-size: 1.2rem;
+      display: flex;
+      align-items: center;
+    }
+    
+    .logo i {
+      margin-right: 10px;
+    }
+    
+    .tagline {
+      font-style: italic;
+      opacity: 0.9;
+      display: none;
+    }
+    
+    /* Hamburger Menu */
+    .menu-btn {
+      display: flex;
+      margin-left: 0;
+      flex-direction: column;
+      justify-content: space-around;
+      width: 30px;
+      height: 25px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      z-index: 101;
+    }
+    
+    .menu-btn:focus {
+      outline: none;
+    }
+    
+    .menu-btn__line {
+      width: 30px;
+      height: 3px;
+      background: white;
+      border-radius: 3px;
+      transition: all 0.3s ease;
+    }
+    
+    /* Sidebar */
+    .sidebar {
+      position: fixed;
+      top: var(--header-height);
+      left: -280px;
+      width: var(--sidebar-width);
+      height: calc(100% - var(--header-height));
+      background-color: white;
+      box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+      transition: all 0.3s ease;
+      z-index: 99;
+      overflow-y: auto;
+    }
+    
+    .sidebar.open {
+      left: 0;
+    }
+    
+    .sidebar-menu {
+      list-style: none;
+      padding: 0;
+      margin-top: 55px;
+    }
+    
+    .sidebar-menu li {
+      padding: 0;
+    }
+    
+    .sidebar-menu a {
+      display: block;
+      padding: 15px 25px;
+      color: var(--dark-color);
+      text-decoration: none;
+      font-size: 1rem;
+      transition: all 0.3s ease;
+      border-left: 4px solid transparent;
+    }
+    
+    .sidebar-menu a:hover {
+      background-color: rgba(0,0,0,0.05);
+      border-left: 4px solid var(--accent-color);
+      color: var(--primary-color);
+    }
+    
+    .sidebar-menu i {
+      margin-right: 10px;
+      width: 20px;
+      text-align: center;
+    }
+    
+    .sidebar-menu .divider {
+      height: 1px;
+      background-color: rgba(0,0,0,0.1);
+      margin: 10px 0;
+    }
+    
+    .overlay {
+      position: fixed;
+      top: var(--header-height);
+      left: 0;
+      width: 100%;
+      height: calc(100% - var(--header-height));
+      background-color: rgba(0,0,0,0.5);
+      z-index: 98;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+    }
+    
+    .overlay.open {
+      opacity: 1;
+      visibility: visible;
+    }
+    
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 2rem;
+      text-align: center;
+      max-width: 800px;
+      margin: var(--header-height) auto 0;
+      width: 100%;
+      transition: all 0.3s ease;
+    }
+    
+    main.shifted {
+      transform: translateX(var(--sidebar-width));
+    }
+    
+    h1 {
+      margin-bottom: 2rem;
+      color: var(--primary-color);
+      font-size: 2rem;
+      background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    
+    .app-description {
+      margin-bottom: 2rem;
+      color: var(--dark-color);
+      max-width: 600px;
+      line-height: 1.8;
+    }
+    
+    .button-container {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      width: 100%;
+      max-width: 300px;
+    }
+    
+    .btn {
+      padding: 1rem 1.5rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    
+    .btn-primary {
+      background-color: var(--primary-color);
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background-color: #235e59;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    .btn-secondary {
+      background-color: var(--secondary-color);
+      color: white;
+    }
+    
+    .btn-secondary:hover {
+      background-color: #5da57d;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    .btn-accent {
+      background-color: var(--accent-color);
+      color: white;
+    }
+    
+    .btn-accent:hover {
+      background-color: #e66a4a;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    .features {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 1.5rem;
+      margin: 2rem 0;
+      width: 100%;
+    }
+    
+    .feature-card {
+      background: white;
+      border-radius: 10px;
+      padding: 1.2rem;
+      width: 100%;
+      max-width: 250px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+      transition: transform 0.3s ease;
+    }
+    
+    .feature-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+    }
+    
+    .feature-icon {
+      font-size: 1.8rem;
+      margin-bottom: 0.8rem;
+      color: var(--primary-color);
+    }
+    
+    footer {
+      background-color: var(--dark-color);
+      color: white;
+      text-align: center;
+      padding: 1rem;
+    }
+    
+    .footer-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      align-items: center;
+    }
+    
+    .social-links {
+      display: flex;
+      gap: 1rem;
+    }
+    
+    .social-links a {
+      color: white;
+      font-size: 1.2rem;
+      transition: color 0.3s ease;
+    }
+    
+    .social-links a:hover {
+      color: var(--accent-color);
+    }
+    
+    @media (min-width: 768px) {
+      .tagline {
+        display: block;
+      }
+      
+      .logo {
+        font-size: 1.5rem;
+      }
+      
+      h1 {
+        font-size: 2.5rem;
+      }
+      
+      .sidebar {
+        top: 0;
+        height: 100%;
+      }
+      
+      .overlay {
+        top: 0;
+        height: 100%;
+      }
+      
+      main {
+        margin-top: 0;
+        padding-top: 4rem;
+      }
+      
+      .footer-content {
+        flex-direction: row;
+        justify-content: space-between;
+      }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+
+  <header>
+    <div class="header-content">
+      <button class="menu-btn">
+        <span class="menu-btn__line"></span>
+        <span class="menu-btn__line"></span>
+        <span class="menu-btn__line"></span>
+      </button>
+      <div class="logo">
+        <i class="fas fa-paint-brush"></i>
+        <span>Doodle Board</span>
+      </div>
+      <div class="tagline">Your digital collaboration space</div>
+    </div>
+  </header>
+
+  <!-- Sidebar Menu -->
+  <div class="sidebar">
+    <ul class="sidebar-menu">
+       <li class="divider"></li>
+      <li><a href="#"><i class="fas fa-sign-in-alt"></i> Login / Sign Up</a></li>
+      <li><a href="#"><i class="fas fa-star"></i> Premium Features</a></li>
+      <li><a href="#"><i class="fas fa-lightbulb"></i> View Features</a></li>
+      <li><a href="#"><i class="fas fa-book"></i> Tutorials</a></li>
+      <li class="divider"></li>
+      <li><a href="#"><i class="fas fa-cog"></i> Settings</a></li>
+      <li><a href="#"><i class="fas fa-palette"></i> Theme</a></li>
+      <li class="divider"></li>
+      <li><a href="#"><i class="fas fa-question-circle"></i> Help Center</a></li>
+      <li><a href="#"><i class="fas fa-envelope"></i> Contact Us</a></li>
+      <li><a href="#"><i class="fas fa-info-circle"></i> About</a></li>
+    </ul>
+  </div>
+  
+  <!-- Overlay -->
+  <div class="overlay"></div>
+
+  <main>
+    <h1>Unleash Your Creativity</h1>
+    
+    <p class="app-description">
+      Create, collaborate, and share your ideas in real-time with our powerful digital canvas. 
+      Perfect for brainstorming, teaching, or just expressing your creativity.
+    </p>
+    
+    <div class="button-container">
+      <button class="btn btn-primary" id="soloBtn">
+        <i class="fas fa-user"></i> Solo Canvas
+      </button>
+      <button class="btn btn-secondary" id="createRoomBtn">
+        <i class="fas fa-plus-circle"></i> Create Room
+      </button>
+      <button class="btn btn-accent" id="joinRoomBtn">
+        <i class="fas fa-user-friends"></i> Join Room
+      </button>
+    </div>
+    
+    <div class="features">
+      <div class="feature-card">
+        <div class="feature-icon">
+          <i class="fas fa-brush"></i>
+        </div>
+        <h3>Powerful Tools</h3>
+        <p>Multiple brush types, shapes, colors and sizes to bring your ideas to life.</p>
+      </div>
+      
+      <div class="feature-card">
+        <div class="feature-icon">
+          <i class="fas fa-users"></i>
+        </div>
+        <h3>Real-time Collaboration</h3>
+        <p>Work together with colleagues or friends simultaneously on the same canvas.</p>
+      </div>
+      
+      <div class="feature-card">
+        <div class="feature-icon">
+          <i class="fas fa-cloud-upload-alt"></i>
+        </div>
+        <h3>Cloud Saving</h3>
+        <p>Your work is automatically saved and accessible from any device.</p>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-content">
+      <div>&copy; <span id="current-year"></span> Chikara Creovations. All Rights Reserved.</div>
+      <div class="social-links">
+        <a href="#"><i class="fab fa-twitter"></i></a>
+        <a href="#"><i class="fab fa-facebook"></i></a>
+        <a href="#"><i class="fab fa-instagram"></i></a>
+        <a href="#"><i class="fab fa-github"></i></a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Set current year in footer
+    document.getElementById('current-year').textContent = new Date().getFullYear();
+    
+    // Button functionality
+    document.getElementById('soloBtn').onclick = () => {
+      window.location.href = 'solo.html';
+    };
+
+    document.getElementById('createRoomBtn').onclick = () => {
+      window.location.href = 'createroom.html';
+    };
+
+    document.getElementById('joinRoomBtn').onclick = () => {
+      window.location.href = 'join-room.html';
+    };
+    
+    // Sidebar functionality
+    const menuBtn = document.querySelector('.menu-btn');
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.querySelector('.overlay');
+    const mainContent = document.querySelector('main');
+    
+    menuBtn.addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('open');
+      mainContent.classList.toggle('shifted');
+      
+      // Animate hamburger icon
+      menuBtn.classList.toggle('open');
+    });
+    
+    overlay.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('open');
+      mainContent.classList.remove('shifted');
+      menuBtn.classList.remove('open');
+    });
+    
+    // Add animation to buttons on hover
+    const buttons = document.querySelectorAll('.btn');
+    buttons.forEach(button => {
+      button.addEventListener('mouseenter', () => {
+        button.querySelector('i').style.transform = 'scale(1.2)';
+      });
+      button.addEventListener('mouseleave', () => {
+        button.querySelector('i').style.transform = 'scale(1)';
+      });
+    });
+  </script>
+
+</body>
+</html>

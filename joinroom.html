@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Join Room - Canvas App</title>
+  <style>
+    :root {
+      --primary-color: #2c7873;
+      --secondary-color: #6fb98f;
+      --accent-color: #ff7e5f;
+      --light-color: #f4f9f4;
+      --dark-color: #2b2b2b;
+    }
+    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body, html {
+      height: 100%;
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      background: var(--light-color);
+      color: var(--dark-color);
+      line-height: 1.6;
+    }
+    
+    header {
+      background-color: var(--primary-color);
+      color: white;
+      padding: 1rem;
+      text-align: center;
+    }
+    
+    .logo {
+      font-weight: bold;
+      font-size: 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+    
+    .join-room-container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      padding: 2rem;
+      width: 100%;
+      max-width: 500px;
+    }
+    
+    h1 {
+      color: var(--primary-color);
+      margin-bottom: 1.5rem;
+      text-align: center;
+      font-size: 1.8rem;
+    }
+    
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+    }
+    
+    input {
+      width: 100%;
+      padding: 12px 15px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 1rem;
+      transition: all 0.3s ease;
+    }
+    
+    input:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 2px rgba(44, 120, 115, 0.2);
+    }
+    
+    .btn {
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+    }
+    
+    .btn-primary {
+      background-color: var(--primary-color);
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background-color: #235e59;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    .qr-section {
+      margin-top: 2rem;
+      text-align: center;
+    }
+    
+    #qr-code {
+      margin: 1rem auto;
+      width: 150px;
+      height: 150px;
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .recent-rooms {
+      margin-top: 2rem;
+    }
+    
+    .room-list {
+      list-style: none;
+      margin-top: 1rem;
+    }
+    
+    .room-item {
+      padding: 10px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      background: rgba(0,0,0,0.03);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .room-item:hover {
+      background: rgba(44, 120, 115, 0.1);
+    }
+    
+    .room-item span {
+      font-family: monospace;
+      font-weight: bold;
+    }
+    
+    footer {
+      background-color: var(--dark-color);
+      color: white;
+      text-align: center;
+      padding: 1rem;
+    }
+    
+    @media (max-width: 768px) {
+      .join-room-container {
+        padding: 1.5rem;
+      }
+      
+      h1 {
+        font-size: 1.5rem;
+      }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+
+  <header>
+    <div class="logo">
+      <i class="fas fa-paint-brush"></i>
+      <span>Canvas App</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="join-room-container">
+      <h1><i class="fas fa-door-open"></i> Join a Room</h1>
+      
+      <div class="form-group">
+        <label for="roomId">Room ID</label>
+        <input type="text" id="roomId" placeholder="Enter the room ID" autofocus>
+      </div>
+      
+      <div class="form-group">
+        <label for="userName">Your Display Name</label>
+        <input type="text" id="userName" placeholder="How others will see you">
+      </div>
+      
+      <div class="form-group">
+        <label for="roomPassword">Password (if required)</label>
+        <input type="password" id="roomPassword" placeholder="Enter room password">
+      </div>
+      
+      <button class="btn btn-primary" id="joinBtn">
+        <i class="fas fa-sign-in-alt"></i> Join Room
+      </button>
+      
+      
+      <div class="recent-rooms">
+        <h3><i class="fas fa-history"></i> Recent Rooms</h3>
+        <ul class="room-list" id="recentRooms">
+          <!-- Recent rooms will be added here dynamically -->
+        </ul>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div>&copy; <span id="current-year"></span> Chikara Creovations. All Rights Reserved.</div>
+  </footer>
+
+  <script>
+    // Set current year in footer
+    document.getElementById('current-year').textContent = new Date().getFullYear();
+    
+    // Load recent rooms from localStorage
+    const recentRooms = JSON.parse(localStorage.getItem('recentRooms') || '[]');
+    const recentRoomsList = document.getElementById('recentRooms');
+    
+    function updateRecentRoomsList() {
+      recentRoomsList.innerHTML = '';
+      recentRooms.slice(0, 3).forEach(room => {
+        const li = document.createElement('li');
+        li.className = 'room-item';
+        li.innerHTML = `
+          <span>${room.id}</span>
+          <i class="fas fa-chevron-right"></i>
+        `;
+        li.addEventListener('click', () => {
+          document.getElementById('roomId').value = room.id;
+          document.getElementById('userName').value = room.userName || '';
+        });
+        recentRoomsList.appendChild(li);
+      });
+    }
+    
+    updateRecentRoomsList();
+    
+    // Load saved user name if available
+    const savedName = localStorage.getItem('userName');
+    if (savedName) {
+      document.getElementById('userName').value = savedName;
+    }
+    
+    // Join room functionality
+    document.getElementById('joinBtn').addEventListener('click', () => {
+      const roomId = document.getElementById('roomId').value.trim();
+      const userName = document.getElementById('userName').value.trim();
+      const password = document.getElementById('roomPassword').value;
+      
+      if (!roomId) {
+        alert('Please enter a room ID');
+        return;
+      }
+      
+      if (!userName) {
+        alert('Please enter your display name');
+        return;
+      }
+      
+      // Save to recent rooms
+      const existingIndex = recentRooms.findIndex(r => r.id === roomId);
+      if (existingIndex >= 0) {
+        recentRooms.splice(existingIndex, 1);
+      }
+      recentRooms.unshift({ id: roomId, userName });
+      localStorage.setItem('recentRooms', JSON.stringify(recentRooms));
+      updateRecentRoomsList();
+      
+      // Save user name for future use
+      localStorage.setItem('userName', userName);
+      
+      // Redirect to room page
+      window.location.href = `room.html?roomId=${roomId}${password ? `&password=${encodeURIComponent(password)}` : ''}`;
+    });
+    
+
+    
+    // Allow pressing Enter in roomId field to submit
+    document.getElementById('roomId').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('joinBtn').click();
+      }
+    });
+    
+
+  </script>
+</body>
+</html>

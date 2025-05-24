@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Collaborative Whiteboard</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      display: flex;
+      flex-direction: column;
+      touch-action: none;
+    }
+    
+    #toolbar {
+      background: #333;
+      padding: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: white;
+      position: relative;
+    }
+    
+    .tool-group {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    
+    .tool-button {
+      background: #555;
+      border: none;
+      width: 36px;
+      height: 36px;
+      border-radius: 4px;
+      cursor: pointer;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .tool-button.active {
+      background: #007bff;
+    }
+    
+    .tool-button:disabled {
+      background: #333;
+      color: #777;
+      cursor: not-allowed;
+    }
+    
+    #colorPicker {
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border: none;
+      background: none;
+    }
+    
+    #sizePicker {
+      width: 100px;
+    }
+    
+    #whiteboard {
+      flex: 1;
+      background: white;
+      touch-action: none;
+    }
+    
+    #menu-popup {
+      position: absolute;
+      top: 100%;
+      right: 8px;
+      background: #333;
+      padding: 10px;
+      border-radius: 4px;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 100;
+    }
+    
+    #menu-popup.show {
+      display: flex;
+    }
+    
+    .menu-item {
+      white-space: nowrap;
+      color: white;
+      padding: 8px;
+      border-radius: 4px;
+      background: #555;
+      border: none;
+      cursor: pointer;
+    }
+    
+    #room-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    #user-count {
+      background: #007bff;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+    }
+    
+    #room-id {
+      font-family: monospace;
+      background: rgba(255,255,255,0.2);
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    
+    #copy-room-id {
+      background: transparent;
+      border: none;
+      color: white;
+      cursor: pointer;
+    }
+    
+    .user-cursor {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 10;
+    }
+    
+    .user-name-tag {
+      position: absolute;
+      font-size: 12px;
+      padding: 2px 6px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      border-radius: 4px;
+      pointer-events: none;
+      white-space: nowrap;
+      transform: translate(15px, -5px);
+    }
+    
+    #whiteboard {
+  will-change: transform;
+  image-rendering: optimizeSpeed;
+}
+    
+    
+  </style>
+</head>
+<body>
+
+  <div id="toolbar">
+    <div class="tool-group">
+      <input type="color" id="colorPicker" value="#000000" class="tool-button">
+      <input type="range" id="sizePicker" min="1" max="20" value="2">
+      <button id="eraserBtn" class="tool-button">🧽</button>
+      <button id="undoBtn" class="tool-button" disabled>↩️</button>
+      <button id="redoBtn" class="tool-button" disabled>↪️</button>
+      <button id="menuBtn" class="tool-button">☰</button>
+      
+      <div id="menu-popup">
+        <button class="menu-item" id="clearBtn">Clear Canvas</button>
+        <button class="menu-item" id="saveBtn">Save Drawing</button>
+        <button class="menu-item" id="loadBtn">Load Drawing</button>
+        <button class="menu-item" id="leaveBtn">Leave Room</button>
+      </div>
+    </div>
+    
+    <div id="room-info">
+      <span id="user-count">1 user</span>
+      <span id="room-id">Loading...</span>
+      <button id="copy-room-id" title="Copy room ID">📋</button>
+    </div>
+  </div>
+
+  <canvas id="whiteboard"></canvas>
+
+<script>
+  // Canvas setup
+  const canvas = document.getElementById('whiteboard');
+  const ctx = canvas.getContext('2d');
+  const colorPicker = document.getElementById('colorPicker');
+  const sizePicker = document.getElementById('sizePicker');
+  const eraserBtn = document.getElementById('eraserBtn');
+  const undoBtn = document.getElementById('undoBtn');
+  const redoBtn = document.getElementById('redoBtn');
+  const menuBtn = document.getElementById('menuBtn');
+  const menuPopup = document.getElementById('menu-popup');
+  const clearBtn = document.getElementById('clearBtn');
+  const saveBtn = document.getElementById('saveBtn');
+  const loadBtn = document.getElementById('loadBtn');
+  const leaveBtn = document.getElementById('leaveBtn');
+  const roomIdDisplay = document.getElementById('room-id');
+  const userCountDisplay = document.getElementById('user-count');
+  const copyRoomIdBtn = document.getElementById('copy-room-id');
+
+  // Room state
+  let roomId = '';
+  let userId = generateId();
+  let userName = localStorage.getItem('userName') || `User-${userId.substr(0, 4)}`;
+  let isHost = false;
+  let userCount = 1;
+  let otherUsers = {};
+  let drawing = false;
+  let erasing = false;
+  let drawingHistory = [];
+  let currentStateIndex = -1;
+  const MAX_HISTORY_STATES = 50;
+  
+  // WebSocket connection
+  let socket;
+  const socketUrl = 'https://compatible-trader-vary-foundation.trycloudflare.com';
+
+  // Drawing optimization
+  let drawQueue = [];
+  let lastSendTime = 0;
+  const SEND_INTERVAL = 16; // ~60fps
+
+  // Initialize the canvas and connection
+  function initialize() {
+    // Add helper methods for tracking current point
+    CanvasRenderingContext2D.prototype.setCurrentPoint = function(point) {
+      this.currentPoint = point;
+    };
+    CanvasRenderingContext2D.prototype.getCurrentPoint = function() {
+      return this.currentPoint;
+    };
+
+    resizeCanvas();
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Get room ID from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    roomId = urlParams.get('roomId') || generateId();
+    isHost = urlParams.get('host') === 'true';
+    
+    roomIdDisplay.textContent = roomId;
+    connectWebSocket();
+    
+    // Start processing draw queue
+    setInterval(processDrawQueue, SEND_INTERVAL);
+    
+    // Load initial state if host
+    if (isHost) {
+      saveState();
+    }
+  }
+  
+  // Generate random ID
+  function generateId() {
+    return Math.random().toString(36).substring(2, 10);
+  }
+  
+  // Set canvas size
+  function resizeCanvas() {
+    const toolbarHeight = document.getElementById('toolbar').offsetHeight;
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight - toolbarHeight;
+    
+    if (drawingHistory.length > 0) {
+      redrawCanvas(drawingHistory[currentStateIndex]);
+    }
+    
+    // Notify others of our viewport size
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({
+        type: 'viewport',
+        width: canvas.width,
+        height: canvas.height,
+        userId
+      }));
+    }
+  }
+  
+  // WebSocket connection
+  function connectWebSocket() {
+    socket = new WebSocket(`${socketUrl}?roomId=${roomId}&userId=${userId}&userName=${encodeURIComponent(userName)}`);
+    
+    socket.onopen = () => {
+      console.log('Connected to WebSocket server');
+      
+      // Request current canvas state if not host
+      if (!isHost) {
+        socket.send(JSON.stringify({
+          type: 'requestState',
+          userId
+        }));
+      }
+    };
+    
+    socket.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      
+      switch(message.type) {
+        case 'draw':
+          handleRemoteDraw(message);
+          break;
+        case 'drawBatch':
+          handleRemoteDrawBatch(message);
+          break;
+        case 'clear':
+          handleRemoteClear();
+          break;
+        case 'state':
+          handleCanvasState(message.state);
+          break;
+        case 'userJoin':
+          handleUserJoin(message);
+          break;
+        case 'userLeave':
+          handleUserLeave(message.userId);
+          break;
+        case 'cursorMove':
+          handleCursorMove(message);
+          break;
+        case 'userCount':
+          updateUserCount(message.count);
+          break;
+      }
+    };
+    
+    socket.onclose = () => {
+      console.log('Disconnected from WebSocket server');
+      alert('Disconnected from server. Please refresh the page.');
+    };
+    
+    socket.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+  }
+  
+  // Handle remote draw events
+  function handleRemoteDraw(message) {
+    if (message.userId === userId) return;
+    
+    const { x0, y0, x1, y1, color, size, isErasing } = message;
+    
+    ctx.lineWidth = size;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = isErasing ? '#fff' : color;
+    
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+  }
+
+  // Handle batched draw commands
+  function handleRemoteDrawBatch(message) {
+    if (message.userId === userId) return;
+    
+    ctx.lineWidth = message.commands[0]?.size || sizePicker.value;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = message.commands[0]?.isErasing ? '#fff' : message.commands[0]?.color || colorPicker.value;
+    
+    ctx.beginPath();
+    message.commands.forEach(cmd => {
+      ctx.moveTo(cmd.x0, cmd.y0);
+      ctx.lineTo(cmd.x1, cmd.y1);
+    });
+    ctx.stroke();
+  }
+  
+  // Handle remote clear events
+  function handleRemoteClear() {
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    saveState();
+  }
+  
+  // Handle initial canvas state
+  function handleCanvasState(state) {
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0);
+      saveState();
+    };
+    img.src = state;
+  }
+  
+  // Handle user joining
+  function handleUserJoin(message) {
+    if (message.userId === userId) return;
+    
+    // Create cursor element for new user
+    const cursor = document.createElement('div');
+    cursor.className = 'user-cursor';
+    cursor.id = `cursor-${message.userId}`;
+    cursor.style.backgroundColor = message.color || '#007bff';
+    
+    const nameTag = document.createElement('div');
+    nameTag.className = 'user-name-tag';
+    nameTag.id = `name-${message.userId}`;
+    nameTag.textContent = message.userName;
+    nameTag.style.color = message.color || '#007bff';
+    
+    document.body.appendChild(cursor);
+    document.body.appendChild(nameTag);
+    
+    otherUsers[message.userId] = {
+      cursor,
+      nameTag
+    };
+  }
+  
+  // Handle user leaving
+  function handleUserLeave(userId) {
+    if (otherUsers[userId]) {
+      document.body.removeChild(otherUsers[userId].cursor);
+      document.body.removeChild(otherUsers[userId].nameTag);
+      delete otherUsers[userId];
+    }
+  }
+  
+  // Handle cursor movement
+  function handleCursorMove(message) {
+    if (message.userId === userId || !otherUsers[message.userId]) return;
+    
+    const { cursor, nameTag } = otherUsers[message.userId];
+    cursor.style.left = `${message.x}px`;
+    cursor.style.top = `${message.y}px`;
+    nameTag.style.left = `${message.x}px`;
+    nameTag.style.top = `${message.y}px`;
+  }
+  
+  // Update user count display
+  function updateUserCount(count) {
+    userCount = count;
+    userCountDisplay.textContent = `${count} user${count !== 1 ? 's' : ''}`;
+  }
+  
+  // Save canvas state to history
+  function saveState() {
+    if (currentStateIndex < drawingHistory.length - 1) {
+      drawingHistory = drawingHistory.slice(0, currentStateIndex + 1);
+    }
+    
+    if (drawingHistory.length >= MAX_HISTORY_STATES) {
+      drawingHistory.shift();
+      currentStateIndex--;
+    }
+    
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    drawingHistory.push(imageData);
+    currentStateIndex++;
+    updateUndoRedoButtons();
+  }
+  
+  // Redraw canvas from history
+  function redrawCanvas(imageData) {
+    ctx.putImageData(imageData, 0, 0);
+  }
+  
+  // Undo action
+  function undo() {
+    if (currentStateIndex > 0) {
+      currentStateIndex--;
+      redrawCanvas(drawingHistory[currentStateIndex]);
+      updateUndoRedoButtons();
+      broadcastCanvasState();
+    }
+  }
+  
+  // Redo action
+  function redo() {
+    if (currentStateIndex < drawingHistory.length - 1) {
+      currentStateIndex++;
+      redrawCanvas(drawingHistory[currentStateIndex]);
+      updateUndoRedoButtons();
+      broadcastCanvasState();
+    }
+  }
+  
+  // Update undo/redo button states
+  function updateUndoRedoButtons() {
+    undoBtn.disabled = currentStateIndex <= 0;
+    redoBtn.disabled = currentStateIndex >= drawingHistory.length - 1;
+  }
+  
+  // Get mouse/touch position
+  function getPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.touches ? e.touches[0].clientX : e.clientX) - rect.left,
+      y: (e.touches ? e.touches[0].clientY : e.clientY) - rect.top
+    };
+  }
+  
+  // Start drawing
+  function startDraw(e) {
+    drawing = true;
+    const pos = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    ctx.setCurrentPoint(pos);
+    
+    // Save initial state
+    saveState();
+    
+    // Broadcast cursor position
+    broadcastCursorPosition(pos.x, pos.y);
+    
+    e.preventDefault();
+  }
+  
+  // End drawing
+  function endDraw(e) {
+    if (drawing) {
+      drawing = false;
+      ctx.beginPath();
+      
+      // Process any remaining draw commands
+      processDrawQueue(true);
+      
+      // Save final state
+      saveState();
+      
+      // Broadcast final cursor position
+      if (e.type !== 'mouseout') {
+        const pos = getPos(e);
+        broadcastCursorPosition(pos.x, pos.y);
+      }
+    }
+    e.preventDefault();
+  }
+  
+  // Draw on canvas
+  function draw(e) {
+    if (!drawing) return;
+    
+    const pos = getPos(e);
+    const prevPos = ctx.getCurrentPoint() || pos;
+    
+    ctx.lineWidth = sizePicker.value;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = erasing ? '#fff' : colorPicker.value;
+    
+    // Draw locally
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    
+    // Add to draw queue
+    drawQueue.push({
+      x0: prevPos.x, 
+      y0: prevPos.y,
+      x1: pos.x,
+      y1: pos.y,
+      color: colorPicker.value,
+      size: sizePicker.value,
+      isErasing: erasing
+    });
+    
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    ctx.setCurrentPoint(pos);
+    
+    e.preventDefault();
+  }
+
+  // Process draw queue and send batches
+  function processDrawQueue(force = false) {
+    const now = Date.now();
+    if ((drawQueue.length > 0 && (now - lastSendTime >= SEND_INTERVAL)) || force) {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+          type: 'drawBatch',
+          commands: [...drawQueue],
+          userId
+        }));
+      }
+      drawQueue = [];
+      lastSendTime = now;
+    }
+  }
+  
+  // Broadcast cursor position
+  function broadcastCursorPosition(x, y) {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({
+        type: 'cursorMove',
+        x,
+        y,
+        userId,
+        userName,
+        color: colorPicker.value
+      }));
+    }
+  }
+  
+  // Broadcast canvas state
+  function broadcastCanvasState() {
+    if (socket && socket.readyState === WebSocket.OPEN && isHost) {
+      socket.send(JSON.stringify({
+        type: 'state',
+        state: canvas.toDataURL(),
+        userId
+      }));
+    }
+  }
+  
+  // Clear canvas
+  function clearCanvas() {
+    saveState();
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    saveState();
+    
+    // Broadcast clear action
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({
+        type: 'clear',
+        userId
+      }));
+    }
+  }
+  
+  // Event listeners
+  canvas.addEventListener('mousedown', startDraw);
+  canvas.addEventListener('mouseup', endDraw);
+  canvas.addEventListener('mouseout', endDraw);
+  canvas.addEventListener('mousemove', draw);
+  
+  canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const mouseEvent = new MouseEvent('mousedown', {
+      clientX: touch.clientX,
+      clientY: touch.clientY
+    });
+    canvas.dispatchEvent(mouseEvent);
+  }, { passive: false });
+  
+  canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const mouseEvent = new MouseEvent('mousemove', {
+      clientX: touch.clientX,
+      clientY: touch.clientY
+    });
+    canvas.dispatchEvent(mouseEvent);
+  }, { passive: false });
+  
+  canvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    const mouseEvent = new MouseEvent('mouseup', {});
+    canvas.dispatchEvent(mouseEvent);
+  }, { passive: false });
+  
+  eraserBtn.addEventListener('click', () => {
+    erasing = !erasing;
+    eraserBtn.classList.toggle('active', erasing);
+  });
+  
+  menuBtn.addEventListener('click', () => {
+    menuPopup.classList.toggle('show');
+  });
+  
+  clearBtn.addEventListener('click', () => {
+    clearCanvas();
+    menuPopup.classList.remove('show');
+  });
+  
+  saveBtn.addEventListener('click', () => {
+    const link = document.createElement('a');
+    link.download = `drawing-${roomId}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    menuPopup.classList.remove('show');
+  });
+  
+  loadBtn.addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = e => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = event => {
+          const img = new Image();
+          img.onload = () => {
+            saveState();
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            saveState();
+            broadcastCanvasState();
+          };
+          img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
+    menuPopup.classList.remove('show');
+  });
+  
+  leaveBtn.addEventListener('click', () => {
+    if (confirm('Are you sure you want to leave this room?')) {
+      window.location.href = 'index.html';
+    }
+  });
+  
+  copyRoomIdBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(roomId)
+      .then(() => {
+        const originalText = copyRoomIdBtn.innerHTML;
+        copyRoomIdBtn.innerHTML = '✓ Copied!';
+        setTimeout(() => {
+          copyRoomIdBtn.innerHTML = originalText;
+        }, 2000);
+      })
+      .catch(err => {
+        console.error('Failed to copy room ID:', err);
+      });
+  });
+  
+  undoBtn.addEventListener('click', undo);
+  redoBtn.addEventListener('click', redo);
+  
+  // Close menu when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!menuBtn.contains(e.target) && !menuPopup.contains(e.target)) {
+      menuPopup.classList.remove('show');
+    }
+  });
+  
+  window.addEventListener('load', initialize);
+  window.addEventListener('resize', resizeCanvas);
+  
+  // Track mouse movement for cursor broadcasting
+  document.addEventListener('mousemove', (e) => {
+    if (!drawing) {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      
+      // Only broadcast if over canvas
+      if (x >= 0 && x <= canvas.width && y >= 0 && y <= canvas.height) {
+        broadcastCursorPosition(x, y);
+      }
+    }
+  });
+</script>
+</body>
+</html>

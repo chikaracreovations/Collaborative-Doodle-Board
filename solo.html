@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Solo Whiteboard</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      display: flex;
+      flex-direction: column;
+      touch-action: none;
+    }
+    #toolbar {
+      background: #333;
+      padding: 8px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      color: white;
+      position: relative;
+    }
+    .tool-button {
+      background: #555;
+      border: none;
+      width: 36px;
+      height: 36px;
+      border-radius: 4px;
+      cursor: pointer;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .tool-button.active {
+      background: #007bff;
+    }
+    .tool-button:disabled {
+      background: #333;
+      color: #777;
+      cursor: not-allowed;
+    }
+    #colorPicker {
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border: none;
+      background: none;
+    }
+    #sizePicker {
+      width: 100px;
+    }
+    #whiteboard {
+      flex: 1;
+      background: white;
+      touch-action: none;
+    }
+    #menu-popup {
+      position: absolute;
+      top: 100%;
+      right: 8px;
+      background: #333;
+      padding: 10px;
+      border-radius: 4px;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 100;
+    }
+    #menu-popup.show {
+      display: flex;
+    }
+    .menu-item {
+      white-space: nowrap;
+      color: white;
+      padding: 8px;
+      border-radius: 4px;
+      background: #555;
+      border: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="toolbar">
+    <input type="color" id="colorPicker" value="#000000" class="tool-button">
+    <input type="range" id="sizePicker" min="1" max="30" value="2">
+    <button id="eraserBtn" class="tool-button">Erase🧽</button>
+    <button id="undoBtn" class="tool-button" disabled>↩️</button>
+    <button id="redoBtn" class="tool-button" disabled>↪️</button>
+    <button id="menuBtn" class="tool-button">☰</button>
+    
+    <div id="menu-popup">
+      <button class="menu-item" id="clearBtn">Clear Canvas</button>
+      <button class="menu-item" id="saveBtn">Save Drawing</button>
+      <button class="menu-item" id="loadBtn">Load Drawing</button>
+    </div>
+  </div>
+
+  <canvas id="whiteboard"></canvas>
+
+  <script>
+    const canvas = document.getElementById('whiteboard');
+    const ctx = canvas.getContext('2d');
+    const colorPicker = document.getElementById('colorPicker');
+    const sizePicker = document.getElementById('sizePicker');
+    const eraserBtn = document.getElementById('eraserBtn');
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    const menuBtn = document.getElementById('menuBtn');
+    const menuPopup = document.getElementById('menu-popup');
+    const clearBtn = document.getElementById('clearBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const loadBtn = document.getElementById('loadBtn');
+
+    // Set canvas size
+    function resizeCanvas() {
+      const toolbarHeight = document.getElementById('toolbar').offsetHeight;
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight - toolbarHeight;
+      if (drawingHistory.length > 0) {
+        redrawCanvas(drawingHistory[currentStateIndex]);
+      }
+    }
+    
+    let drawing = false;
+    let erasing = false;
+    let drawingHistory = [];
+    let currentStateIndex = -1;
+    const MAX_HISTORY_STATES = 50;
+    
+    function initializeCanvas() {
+      resizeCanvas();
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      saveState();
+    }
+    
+    function saveState() {
+      if (currentStateIndex < drawingHistory.length - 1) {
+        drawingHistory = drawingHistory.slice(0, currentStateIndex + 1);
+      }
+      if (drawingHistory.length >= MAX_HISTORY_STATES) {
+        drawingHistory.shift();
+        currentStateIndex--;
+      }
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      drawingHistory.push(imageData);
+      currentStateIndex++;
+      updateUndoRedoButtons();
+    }
+    
+    function redrawCanvas(imageData) {
+      ctx.putImageData(imageData, 0, 0);
+    }
+    
+    function undo() {
+      if (currentStateIndex > 0) {
+        currentStateIndex--;
+        redrawCanvas(drawingHistory[currentStateIndex]);
+        updateUndoRedoButtons();
+      }
+    }
+    
+    function redo() {
+      if (currentStateIndex < drawingHistory.length - 1) {
+        currentStateIndex++;
+        redrawCanvas(drawingHistory[currentStateIndex]);
+        updateUndoRedoButtons();
+      }
+    }
+    
+    function updateUndoRedoButtons() {
+      undoBtn.disabled = currentStateIndex <= 0;
+      redoBtn.disabled = currentStateIndex >= drawingHistory.length - 1;
+    }
+
+    function getPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (e.touches ? e.touches[0].clientX : e.clientX) - rect.left,
+        y: (e.touches ? e.touches[0].clientY : e.clientY) - rect.top
+      };
+    }
+
+    function startDraw(e) {
+      drawing = true;
+      const pos = getPos(e);
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
+      saveState();
+      e.preventDefault();
+    }
+
+    function endDraw(e) {
+      if (drawing) {
+        drawing = false;
+        ctx.beginPath();
+        saveState();
+      }
+      e.preventDefault();
+    }
+
+    function draw(e) {
+      if (!drawing) return;
+      const pos = getPos(e);
+      ctx.lineWidth = sizePicker.value;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = erasing ? '#fff' : colorPicker.value;
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
+      e.preventDefault();
+    }
+
+    // Event listeners
+    canvas.addEventListener('mousedown', startDraw);
+    canvas.addEventListener('mouseup', endDraw);
+    canvas.addEventListener('mouseout', endDraw);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('touchstart', startDraw, { passive: false });
+    canvas.addEventListener('touchend', endDraw, { passive: false });
+    canvas.addEventListener('touchcancel', endDraw, { passive: false });
+    canvas.addEventListener('touchmove', draw, { passive: false });
+
+    eraserBtn.addEventListener('click', () => {
+      erasing = !erasing;
+      eraserBtn.classList.toggle('active', erasing);
+    });
+
+    menuBtn.addEventListener('click', () => {
+      menuPopup.classList.toggle('show');
+    });
+
+    clearBtn.addEventListener('click', () => {
+      saveState();
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      saveState();
+      menuPopup.classList.remove('show');
+    });
+
+    saveBtn.addEventListener('click', () => {
+      const link = document.createElement('a');
+      link.download = 'drawing.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      menuPopup.classList.remove('show');
+    });
+
+    loadBtn.addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = e => {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = event => {
+            const img = new Image();
+            img.onload = () => {
+              saveState();
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+              saveState();
+            };
+            img.src = event.target.result;
+          };
+          reader.readAsDataURL(file);
+        }
+      };
+      input.click();
+      menuPopup.classList.remove('show');
+    });
+    
+    undoBtn.addEventListener('click', undo);
+    redoBtn.addEventListener('click', redo);
+    
+    // Close menu when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!menuBtn.contains(e.target) && !menuPopup.contains(e.target)) {
+        menuPopup.classList.remove('show');
+      }
+    });
+
+    window.addEventListener('load', initializeCanvas);
+    window.addEventListener('resize', resizeCanvas);
+  </script>
+</body>
+</html>
