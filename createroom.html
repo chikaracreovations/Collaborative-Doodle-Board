@@ -273,6 +273,10 @@
         <input type="text" id="roomName" placeholder="e.g. Team Brainstorming" required>
       </div>
       
+      <div class="form-group">
+        <label for="roomPassword">Password (optional)</label>
+        <input type="password" id="roomPassword" placeholder="Set a join password">
+      </div>
       
       <div class="form-group">
         <label for="userName">Your Display Name</label>
@@ -332,7 +336,7 @@
     document.getElementById('createRoomBtn').addEventListener('click', () => {
       const roomName = document.getElementById('roomName').value;
       const userName = document.getElementById('userName').value;
-      
+      const password = document.getElementById('roomPassword').value;
       
       if (!roomName || !userName) {
         alert('Please fill in all required fields');
@@ -363,7 +367,6 @@
         document.getElementById('userName').value = savedName;
       }
     });
-    
   </script>
 
 </body>

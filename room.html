@@ -204,6 +204,22 @@
   const roomIdDisplay = document.getElementById('room-id');
   const userCountDisplay = document.getElementById('user-count');
   const copyRoomIdBtn = document.getElementById('copy-room-id');
+  
+  // Detect if the page is loaded over HTTPS
+const isSecure = window.location.protocol === 'https:';
+
+
+// Add reconnect logic
+function connectWebSocket() {
+  const socket = new WebSocket(`${socketUrl}?roomId=${roomId}&userId=${userId}&userName=${encodeURIComponent(userName)}`);
+  
+  socket.onclose = () => {
+    console.log('Reconnecting in 2 seconds...');
+    setTimeout(connectWebSocket, 2000);
+  };
+  
+  // ... rest of your WebSocket handlers
+}
 
   // Room state
   let roomId = '';
@@ -221,6 +237,9 @@
   // WebSocket connection
   let socket;
   const socketUrl = 'https://compatible-trader-vary-foundation.trycloudflare.com';
+  
+  
+  
 
   // Drawing optimization
   let drawQueue = [];
@@ -754,6 +773,7 @@
       }
     }
   });
+  
 </script>
 </body>
 </html>
