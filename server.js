@@ -5,6 +5,7 @@ const rooms = {};
 
 // Track message rates per user
 const messageRates = {};
+const PING_INTERVAL = 30000; // 30 seconds
 
 wss.on('connection', (ws, req) => {
   const urlParams = new URLSearchParams(req.url.split('?')[1]);
@@ -12,11 +13,16 @@ wss.on('connection', (ws, req) => {
   const userId = urlParams.get('userId');
   const userName = decodeURIComponent(urlParams.get('userName') || `User-${userId.substr(0, 4)}`);
 
+  if (!roomId || !userId) {
+    ws.close(4001, 'Missing roomId or userId');
+    return;
+  }
+
   if (!rooms[roomId]) {
     rooms[roomId] = {
       users: {},
       canvasState: null,
-      drawBatches: {}
+      hostId: userId // First user becomes host
     };
   }
 
@@ -29,17 +35,26 @@ wss.on('connection', (ws, req) => {
   room.users[userId] = {
     ws,
     userName,
-    color: `hsl(${Math.floor(Math.random() * 360)}, 70%, 50%)`
+    color: `hsl(${Math.floor(Math.random() * 360)}, 70%, 50%)`,
+    lastActive: Date.now()
   };
+
+  // Set up ping/pong
+  const pingInterval = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.ping();
+    }
+  }, PING_INTERVAL);
 
   // Notify all users in room about new count
   broadcastUserCount(room);
 
   // Send welcome message with current state if available
-  if (room.canvasState) {
+  if (room.canvasState && userId !== room.hostId) {
     safeSend(ws, {
       type: 'state',
-      state: room.canvasState
+      state: room.canvasState,
+      version: room.version || 0
     });
   }
 
@@ -53,10 +68,11 @@ wss.on('connection', (ws, req) => {
 
   ws.on('message', (message) => {
     try {
+      room.users[userId].lastActive = Date.now();
       const data = JSON.parse(message);
       
       // Rate limiting
-      if (messageRates[userId].count > 1000) { // Safety limit
+      if (messageRates[userId].count > 500) { // More reasonable safety limit
         console.log(`Rate limiting user ${userId}`);
         return;
       }
@@ -64,8 +80,8 @@ wss.on('connection', (ws, req) => {
       
       switch(data.type) {
         case 'draw':
-          // Throttle rapid draw messages
-          if (Date.now() - messageRates[userId].lastDraw < 10) {
+          // Less aggressive throttle (30ms)
+          if (Date.now() - messageRates[userId].lastDraw < 30) {
             return;
           }
           messageRates[userId].lastDraw = Date.now();
@@ -73,53 +89,62 @@ wss.on('connection', (ws, req) => {
           break;
           
         case 'drawBatch':
-          // Handle batched draw commands
-          if (!room.drawBatches[userId]) {
-            room.drawBatches[userId] = [];
-            // Process batches on next tick
-            setImmediate(() => {
-              if (room.drawBatches[userId] && room.drawBatches[userId].length > 0) {
-                broadcastToRoom(room, {
-                  type: 'drawBatch',
-                  commands: room.drawBatches[userId],
-                  userId
-                }, userId);
-                delete room.drawBatches[userId];
-              }
-            });
+          // Immediately broadcast batches
+          if (data.commands && data.commands.length > 0) {
+            broadcastToRoom(room, {
+              type: 'drawBatch',
+              commands: data.commands,
+              userId
+            }, userId);
           }
-          room.drawBatches[userId].push(...data.commands);
           break;
           
         case 'clear':
           room.canvasState = null;
+          room.version = (room.version || 0) + 1;
           broadcastToRoom(room, data, userId);
           break;
           
         case 'state':
-          // Host is sending updated state
-          if (data.userId === userId) {
+          // Only host can update state
+          if (userId === room.hostId) {
             room.canvasState = data.state;
+            room.version = (room.version || 0) + 1;
+            // Broadcast to all except host (host already has latest)
+            broadcastToRoom(room, {
+              type: 'state',
+              state: data.state,
+              version: room.version
+            }, userId);
           }
           break;
           
         case 'requestState':
           // Send current state to requesting user
           if (room.canvasState) {
-            safeSend(room.users[userId].ws, {
+            safeSend(ws, {
               type: 'state',
-              state: room.canvasState
+              state: room.canvasState,
+              version: room.version || 0
             });
           }
           break;
           
         case 'cursorMove':
           // Broadcast cursor position
-          broadcastToRoom(room, data, userId);
+          broadcastToRoom(room, {
+            ...data,
+            color: room.users[userId]?.color
+          }, userId);
+          break;
+          
+        case 'pong':
+          // Update last active on pong
+          room.users[userId].lastActive = Date.now();
           break;
           
         default:
-          broadcastToRoom(room, data, userId);
+          console.log('Unknown message type:', data.type);
       }
     } catch (e) {
       console.error('Error handling message:', e);
@@ -127,25 +152,32 @@ wss.on('connection', (ws, req) => {
   });
 
   ws.on('close', () => {
+    clearInterval(pingInterval);
+    
     // Clean up user data
     delete messageRates[userId];
     
-    // Remove pending batches
-    if (room.drawBatches[userId]) {
-      delete room.drawBatches[userId];
+    // Remove user from room if still exists
+    if (room.users[userId]) {
+      delete room.users[userId];
+      
+      // Notify others about user leaving
+      broadcastToRoom(room, {
+        type: 'userLeave',
+        userId
+      });
+      
+      // Update user count
+      broadcastUserCount(room);
+      
+      // If host left, assign new host
+      if (userId === room.hostId && Object.keys(room.users).length > 0) {
+        room.hostId = Object.keys(room.users)[0];
+        safeSend(room.users[room.hostId].ws, {
+          type: 'hostPromotion'
+        });
+      }
     }
-    
-    // Remove user from room
-    delete room.users[userId];
-    
-    // Notify others about user leaving
-    broadcastToRoom(room, {
-      type: 'userLeave',
-      userId
-    });
-    
-    // Update user count
-    broadcastUserCount(room);
     
     // Clean up empty rooms
     if (Object.keys(room.users).length === 0) {
@@ -153,9 +185,16 @@ wss.on('connection', (ws, req) => {
     }
   });
 
+  ws.on('error', (err) => {
+    console.error('WebSocket error:', err);
+    ws.close();
+  });
+
   // Reset message count every second
   const rateTimer = setInterval(() => {
-    messageRates[userId].count = 0;
+    if (messageRates[userId]) {
+      messageRates[userId].count = 0;
+    }
   }, 1000);
 
   ws.on('close', () => {
@@ -189,14 +228,18 @@ function safeSend(ws, data) {
   }
 }
 
-// Clean up empty rooms periodically
+// Clean up inactive connections
 setInterval(() => {
-  Object.keys(rooms).forEach(roomId => {
-    if (Object.keys(rooms[roomId].users).length === 0) {
-      console.log(`Cleaning up empty room: ${roomId}`);
-      delete rooms[roomId];
-    }
+  const now = Date.now();
+  Object.entries(rooms).forEach(([roomId, room]) => {
+    Object.entries(room.users).forEach(([userId, user]) => {
+      if (now - user.lastActive > PING_INTERVAL * 2) {
+        console.log(`Closing inactive connection: ${userId}`);
+        user.ws.close(4002, 'Inactive connection');
+      }
+    });
   });
-}, 60000); // Every minute
+}, PING_INTERVAL);
 
-console.log('WebSocket server running on ws://localhost:8080');
+console.log(`WebSocket server running on port ${port}`);
+
