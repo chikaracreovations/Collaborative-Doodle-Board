@@ -150,11 +150,21 @@
     }
     
     #whiteboard {
-  will-change: transform;
-  image-rendering: optimizeSpeed;
-}
+      will-change: transform;
+      image-rendering: optimizeSpeed;
+    }
     
-    
+    #connection-status {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      padding: 5px 10px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      border-radius: 4px;
+      z-index: 100;
+      transition: background-color 0.3s;
+    }
   </style>
 </head>
 <body>
@@ -176,15 +186,17 @@
       </div>
     </div>
     
+   
   </div>
   
-      <div id="room-info">
+   <div id="room-info">
       <span id="user-count">1 user</span>
       <span id="room-id">Loading...</span>
       <button id="copy-room-id" title="Copy room ID">📋</button>
     </div>
 
   <canvas id="whiteboard"></canvas>
+  <div id="connection-status">Connecting...</div>
 
 <script>
   // Canvas setup
@@ -204,23 +216,8 @@
   const roomIdDisplay = document.getElementById('room-id');
   const userCountDisplay = document.getElementById('user-count');
   const copyRoomIdBtn = document.getElementById('copy-room-id');
+  const connectionStatus = document.getElementById('connection-status');
   
-  // Detect if the page is loaded over HTTPS
-const isSecure = window.location.protocol === 'https:';
-
-
-// Add reconnect logic
-function connectWebSocket() {
-  const socket = new WebSocket(`${socketUrl}?roomId=${roomId}&userId=${userId}&userName=${encodeURIComponent(userName)}`);
-  
-  socket.onclose = () => {
-    console.log('Reconnecting in 2 seconds...');
-    setTimeout(connectWebSocket, 2000);
-  };
-  
-  // ... rest of your WebSocket handlers
-}
-
   // Room state
   let roomId = '';
   let userId = generateId();
@@ -236,15 +233,16 @@ function connectWebSocket() {
   
   // WebSocket connection
   let socket;
-  const socketUrl = 'https://collaborative-doodle-board-server.onrender.com';
+  let pingInterval;
+  const socketUrl = 'wss://collaborative-doodle-board-server.onrender.com';
+  const RECONNECT_DELAY = 2000;
+  const PING_INTERVAL = 30000;
   
-  
-  
-
   // Drawing optimization
   let drawQueue = [];
   let lastSendTime = 0;
   const SEND_INTERVAL = 16; // ~60fps
+  const MAX_BATCH_SIZE = 50;
 
   // Initialize the canvas and connection
   function initialize() {
@@ -303,12 +301,29 @@ function connectWebSocket() {
     }
   }
   
-  // WebSocket connection
+  // WebSocket connection with reconnect logic
   function connectWebSocket() {
+    if (socket) {
+      socket.onclose = null;
+      socket.close();
+    }
+    
+    connectionStatus.textContent = 'Connecting...';
+    connectionStatus.style.backgroundColor = '#FF9800';
+    
     socket = new WebSocket(`${socketUrl}?roomId=${roomId}&userId=${userId}&userName=${encodeURIComponent(userName)}`);
     
     socket.onopen = () => {
       console.log('Connected to WebSocket server');
+      connectionStatus.textContent = 'Connected';
+      connectionStatus.style.backgroundColor = '#4CAF50';
+      
+      // Set up ping/pong
+      pingInterval = setInterval(() => {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: 'ping' }));
+        }
+      }, PING_INTERVAL);
       
       // Request current canvas state if not host
       if (!isHost) {
@@ -320,44 +335,92 @@ function connectWebSocket() {
     };
     
     socket.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      
-      switch(message.type) {
-        case 'draw':
-          handleRemoteDraw(message);
-          break;
-        case 'drawBatch':
-          handleRemoteDrawBatch(message);
-          break;
-        case 'clear':
-          handleRemoteClear();
-          break;
-        case 'state':
-          handleCanvasState(message.state);
-          break;
-        case 'userJoin':
-          handleUserJoin(message);
-          break;
-        case 'userLeave':
-          handleUserLeave(message.userId);
-          break;
-        case 'cursorMove':
-          handleCursorMove(message);
-          break;
-        case 'userCount':
-          updateUserCount(message.count);
-          break;
+      try {
+        const message = JSON.parse(event.data);
+        
+        if (!message.type) {
+          throw new Error('Missing message type');
+        }
+        
+        switch(message.type) {
+          case 'draw':
+            if (validateDrawMessage(message)) {
+              handleRemoteDraw(message);
+            }
+            break;
+          case 'drawBatch':
+            if (validateDrawBatchMessage(message)) {
+              handleRemoteDrawBatch(message);
+            }
+            break;
+          case 'clear':
+            handleRemoteClear();
+            break;
+          case 'state':
+            handleCanvasState(message.state);
+            break;
+          case 'userJoin':
+            handleUserJoin(message);
+            break;
+          case 'userLeave':
+            handleUserLeave(message.userId);
+            break;
+          case 'cursorMove':
+            if (validateCursorMessage(message)) {
+              handleCursorMove(message);
+            }
+            break;
+          case 'userCount':
+            updateUserCount(message.count);
+            break;
+          case 'pong':
+            // Update last received pong timestamp if needed
+            break;
+        }
+      } catch (e) {
+        console.error('Error processing message:', e);
       }
     };
     
-    socket.onclose = () => {
-      console.log('Disconnected from WebSocket server');
-      alert('Disconnected from server. Please refresh the page.');
+    socket.onclose = (e) => {
+      console.log('Disconnected from WebSocket server:', e.reason);
+      connectionStatus.textContent = 'Disconnected - Reconnecting...';
+      connectionStatus.style.backgroundColor = '#F44336';
+      
+      if (pingInterval) clearInterval(pingInterval);
+      
+      // Clean up user cursors
+      Object.keys(otherUsers).forEach(userId => {
+        handleUserLeave(userId);
+      });
+      
+      // Reconnect with exponential backoff
+      setTimeout(connectWebSocket, RECONNECT_DELAY + Math.random() * 2000);
     };
     
     socket.onerror = (error) => {
       console.error('WebSocket error:', error);
+      connectionStatus.textContent = 'Connection Error';
+      connectionStatus.style.backgroundColor = '#F44336';
     };
+  }
+  
+  // Message validation
+  function validateDrawMessage(msg) {
+    return msg.x0 !== undefined && msg.y0 !== undefined && 
+           msg.x1 !== undefined && msg.y1 !== undefined &&
+           msg.color && msg.size;
+  }
+  
+  function validateDrawBatchMessage(msg) {
+    return Array.isArray(msg.commands) && msg.commands.every(cmd => 
+      cmd.x0 !== undefined && cmd.y0 !== undefined && 
+      cmd.x1 !== undefined && cmd.y1 !== undefined
+    );
+  }
+  
+  function validateCursorMessage(msg) {
+    return msg.x !== undefined && msg.y !== undefined && msg.userId;
   }
   
   // Handle remote draw events
@@ -381,6 +444,8 @@ function connectWebSocket() {
   function handleRemoteDrawBatch(message) {
     if (message.userId === userId) return;
     
+    if (message.commands.length === 0) return;
+    
     ctx.lineWidth = message.commands[0]?.size || sizePicker.value;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -403,12 +468,17 @@ function connectWebSocket() {
   
   // Handle initial canvas state
   function handleCanvasState(state) {
-    const img = new Image();
-    img.onload = () => {
-      ctx.drawImage(img, 0, 0);
-      saveState();
-    };
-    img.src = state;
+    try {
+      const parsedState = typeof state === 'string' ? JSON.parse(state) : state;
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0);
+        saveState();
+      };
+      img.src = parsedState.imageData || parsedState;
+    } catch (e) {
+      console.error('Failed to load canvas state:', e);
+    }
   }
   
   // Handle user joining
@@ -594,17 +664,21 @@ function connectWebSocket() {
   // Process draw queue and send batches
   function processDrawQueue(force = false) {
     const now = Date.now();
+    const shouldSend = force || 
+                     (drawQueue.length >= 10) || 
+                     (drawQueue.length > 0 && (now - lastSendTime >= SEND_INTERVAL));
     
-    
-    if ((drawQueue.length > 0 && (now - lastSendTime >= SEND_INTERVAL)) || force) {
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({
-          type: 'drawBatch',
-          commands: [...drawQueue],
-          userId
-        }));
-      }
-      drawQueue = [];
+    if (shouldSend && socket && socket.readyState === WebSocket.OPEN) {
+      // Limit batch size
+      const batch = drawQueue.slice(0, MAX_BATCH_SIZE);
+      socket.send(JSON.stringify({
+        type: 'drawBatch',
+        commands: batch,
+        userId
+      }));
+      
+      // Remove sent commands
+      drawQueue = drawQueue.slice(batch.length);
       lastSendTime = now;
     }
   }
@@ -626,9 +700,13 @@ function connectWebSocket() {
   // Broadcast canvas state
   function broadcastCanvasState() {
     if (socket && socket.readyState === WebSocket.OPEN && isHost) {
+      const state = {
+        imageData: canvas.toDataURL(),
+        version: Date.now()
+      };
       socket.send(JSON.stringify({
         type: 'state',
-        state: canvas.toDataURL(),
+        state: JSON.stringify(state),
         userId
       }));
     }
