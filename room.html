@@ -594,6 +594,8 @@ function connectWebSocket() {
   // Process draw queue and send batches
   function processDrawQueue(force = false) {
     const now = Date.now();
+    
+    
     if ((drawQueue.length > 0 && (now - lastSendTime >= SEND_INTERVAL)) || force) {
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({
