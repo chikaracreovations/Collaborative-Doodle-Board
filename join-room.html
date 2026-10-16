@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Join Room | DoodleBoard</title>
+  <meta name="description" content="Join an existing collaborative whiteboard session by entering your room code and display name.">
+  
+  <!-- Fonts & Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Modular Stylesheets -->
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/forms.css">
+</head>
+<body>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="header-content">
+      <a href="index.html" class="back-btn" id="backBtn">
+        <i class="fas fa-arrow-left"></i>
+        <span>Home</span>
+      </a>
+
+      <a href="index.html" class="brand-link">
+        <div class="logo">
+          <i class="fas fa-paint-brush"></i>
+          <span>DoodleBoard</span>
+        </div>
+      </a>
+
+      <div style="width: 70px;"></div>
+    </div>
+  </header>
+
+  <!-- Main Join Room Card -->
+  <main class="form-main">
+    <div class="form-card">
+      <h1><i class="fas fa-door-open"></i> Join Room</h1>
+      
+      <div class="form-group">
+        <label for="roomId">Room Code</label>
+        <input type="text" id="roomId" placeholder="Enter 6-character room code" autofocus uppercase>
+      </div>
+      
+      <div class="form-group">
+        <label for="userName">Your Display Name</label>
+        <input type="text" id="userName" placeholder="How others will see you" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="roomPassword">Password (if room is private)</label>
+        <input type="password" id="roomPassword" placeholder="Enter room password">
+      </div>
+      
+      <button class="btn btn-primary" id="joinBtn">
+        <i class="fas fa-sign-in-alt"></i> Enter Whiteboard
+      </button>
+      
+      <div class="recent-rooms">
+        <h3><i class="fas fa-history"></i> Recent Rooms</h3>
+        <ul class="room-list" id="recentRooms">
+          <!-- Dynamically populated via js/join-room.js -->
+        </ul>
+      </div>
+    </div>
+  </main>
+
+  <!-- App Footer -->
+  <footer class="app-footer">
+    <div class="footer-content">
+      <div>&copy; <span id="current-year"></span> Chikara Creovations. All Rights Reserved.</div>
+    </div>
+  </footer>
+
+  <!-- Client Script -->
+  <script src="js/join-room.js"></script>
+</body>
+</html>

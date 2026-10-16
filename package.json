@@ -1,11 +1,34 @@
 {
-  "name": "websocket-server",
+  "name": "collaborative-doodle-board",
   "version": "1.0.0",
-  "main": "server.js",
+  "description": "A high-performance real-time collaborative whiteboard with WebSocket synchronization, custom room codes, live cursor tracking, solo mode, and PNG export.",
+  "main": "server/server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server/server.js",
+    "dev": "node --watch server/server.js",
+    "server": "node server/server.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chikaracreovations/Collaborative-Doodle-Board.git"
+  },
+  "keywords": [
+    "whiteboard",
+    "canvas",
+    "collaborative",
+    "real-time",
+    "websocket",
+    "nodejs",
+    "html5-canvas",
+    "drawing-tool"
+  ],
+  "author": "Chikara Creovations",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/chikaracreovations/Collaborative-Doodle-Board/issues"
+  },
+  "homepage": "https://github.com/chikaracreovations/Collaborative-Doodle-Board#readme",
   "dependencies": {
-    "ws": "^8.0.0"
+    "ws": "^8.18.0"
   }
 }

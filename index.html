@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DoodleBoard | Real-Time Collaborative Canvas</title>
+  <meta name="description" content="A real-time multi-user collaborative whiteboard with instant WebSocket synchronization, custom rooms, solo sketch mode, and PNG export.">
+  
+  <!-- Fonts & Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Modular Stylesheets -->
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/landing.css">
+</head>
+<body>
+
+  <!-- App Navigation Header -->
+  <header class="app-header">
+    <div class="header-content">
+      <button class="menu-btn" aria-label="Toggle navigation menu">
+        <span class="menu-btn__line"></span>
+        <span class="menu-btn__line"></span>
+        <span class="menu-btn__line"></span>
+      </button>
+
+      <a href="index.html" class="brand-link">
+        <div class="logo">
+          <i class="fas fa-paint-brush"></i>
+          <span>DoodleBoard</span>
+        </div>
+      </a>
+
+      <div class="tagline">Your digital collaboration space</div>
+    </div>
+  </header>
+
+  <!-- Sidebar Navigation Drawer -->
+  <aside class="sidebar">
+    <ul class="sidebar-menu">
+      <li class="divider"></li>
+      <li><a href="solo.html"><i class="fas fa-pencil-alt"></i> Solo Sketching</a></li>
+      <li><a href="create-room.html"><i class="fas fa-plus-circle"></i> Create Room</a></li>
+      <li><a href="join-room.html"><i class="fas fa-sign-in-alt"></i> Join Existing Room</a></li>
+      <li class="divider"></li>
+      <li><a href="#features"><i class="fas fa-star"></i> Features</a></li>
+      <li><a href="https://github.com/chikaracreovations/Collaborative-Doodle-Board" target="_blank" rel="noopener noreferrer"><i class="fab fa-github"></i> GitHub Repository</a></li>
+      <li class="divider"></li>
+      <li><a href="#"><i class="fas fa-info-circle"></i> About Chikara Creovations</a></li>
+    </ul>
+  </aside>
+  
+  <!-- Backdrop Overlay -->
+  <div class="overlay"></div>
+
+  <!-- Hero Content -->
+  <main class="landing-main">
+    <div class="hero-badge">
+      <i class="fas fa-bolt"></i> Real-Time Multi-User Whiteboard
+    </div>
+
+    <h1 class="hero-title">Unleash Your Creativity</h1>
+    
+    <h2 class="hero-subtitle">Designed & Built by Chikara Creovations</h2>
+    
+    <p class="app-description">
+      Create, collaborate, and share ideas instantly in real-time on an interactive digital canvas.
+      Perfect for remote teams, brainstorming sessions, interactive tutoring, or casual doodling.
+    </p>
+    
+    <div class="button-container">
+      <button class="btn btn-primary" id="soloBtn">
+        <i class="fas fa-user"></i> Solo Canvas
+      </button>
+      <button class="btn btn-secondary" id="createRoomBtn">
+        <i class="fas fa-plus-circle"></i> Create Room
+      </button>
+      <button class="btn btn-accent" id="joinRoomBtn">
+        <i class="fas fa-user-friends"></i> Join Room
+      </button>
+    </div>
+    
+    <!-- Feature Highlights -->
+    <section class="features" id="features">
+      <div class="feature-card">
+        <div class="feature-icon">
+          <i class="fas fa-paint-brush"></i>
+        </div>
+        <h3>Creative Tools</h3>
+        <p>Multiple colors, adjustable brush thicknesses, smooth stroke curves, and responsive eraser tools.</p>
+      </div>
+      
+      <div class="feature-card">
+        <div class="feature-icon">
+          <i class="fas fa-users"></i>
+        </div>
+        <h3>Live Collaboration</h3>
+        <p>Ultra-low latency WebSocket synchronization with 60 FPS drawing batching and live peer cursor tracking.</p>
+      </div>
+      
+      <div class="feature-card">
+        <div class="feature-icon">
+          <i class="fas fa-file-download"></i>
+        </div>
+        <h3>Export & Import</h3>
+        <p>Download your sketches as high-res PNG images or load existing graphics directly onto the canvas.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- App Footer -->
+  <footer class="app-footer">
+    <div class="footer-content">
+      <div>&copy; <span id="current-year"></span> Chikara Creovations. All Rights Reserved.</div>
+      <div class="social-links">
+        <a href="https://github.com/chikaracreovations" target="_blank" rel="noopener noreferrer" aria-label="GitHub"><i class="fab fa-github"></i></a>
+        <a href="#" aria-label="Twitter"><i class="fab fa-twitter"></i></a>
+        <a href="#" aria-label="LinkedIn"><i class="fab fa-linkedin"></i></a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Client Script -->
+  <script src="js/main.js"></script>
+</body>
+</html>
